@@ -1,0 +1,63 @@
+name: Build macOS app
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Build universal app
+        run: make app
+
+      - name: Verify app
+        run: |
+          APP="dist/T100 Logo 白色呼吸.app"
+          lipo -archs "$APP/Contents/MacOS/T100 Logo 白色呼吸" | grep -q arm64
+          lipo -archs "$APP/Contents/MacOS/T100 Logo 白色呼吸" | grep -q x86_64
+          plutil -lint "$APP/Contents/Info.plist"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      - name: Package app
+        id: package
+        run: |
+          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist)
+          ARCHIVE="dist/T100-Logo-${VERSION}-macOS.zip"
+          ditto -c -k --sequesterRsrc --keepParent \
+            "dist/T100 Logo 白色呼吸.app" \
+            "$ARCHIVE"
+          shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: T100-Logo-${{ steps.package.outputs.version }}-macOS
+          path: |
+            ${{ steps.package.outputs.archive }}
+            ${{ steps.package.outputs.archive }}.sha256
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            "${{ steps.package.outputs.archive }}" \
+            "${{ steps.package.outputs.archive }}.sha256" \
+            --generate-notes \
+            --title "$GITHUB_REF_NAME"
