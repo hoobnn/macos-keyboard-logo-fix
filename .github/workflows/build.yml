@@ -18,7 +18,7 @@ jobs:
 
     steps:
       - name: Check out source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build universal app
         run: make app
@@ -44,7 +44,7 @@ jobs:
           echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
 
       - name: Upload workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: T100-Logo-${{ steps.package.outputs.version }}-macOS
           path: |
@@ -56,8 +56,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" \
-            "${{ steps.package.outputs.archive }}" \
-            "${{ steps.package.outputs.archive }}.sha256" \
-            --generate-notes \
-            --title "$GITHUB_REF_NAME"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" \
+              "${{ steps.package.outputs.archive }}" \
+              "${{ steps.package.outputs.archive }}.sha256" \
+              --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              "${{ steps.package.outputs.archive }}" \
+              "${{ steps.package.outputs.archive }}.sha256" \
+              --generate-notes \
+              --title "$GITHUB_REF_NAME"
+          fi
