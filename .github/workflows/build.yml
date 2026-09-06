@@ -29,6 +29,8 @@ jobs:
           lipo -archs "$APP/Contents/MacOS/Keyboard Logo Fix" | grep -q arm64
           lipo -archs "$APP/Contents/MacOS/Keyboard Logo Fix" | grep -q x86_64
           plutil -lint "$APP/Contents/Info.plist"
+          test "$(plutil -extract CFBundleIconFile raw "$APP/Contents/Info.plist")" = "KeyboardLogoFix.icns"
+          test -f "$APP/Contents/Resources/KeyboardLogoFix.icns"
           codesign --verify --deep --strict --verbose=2 "$APP"
 
       - name: Package app
