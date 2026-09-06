@@ -2,6 +2,8 @@
 
 [简体中文](README.md) · **English**
 
+![Keyboard Logo Fix white ceramic keyboard with glass lighting](assets/readme-hero.png)
+
 macOS writes a green indicator state to some HID keyboards, overriding the LOGO
 lighting effect you configured and saved on the keyboard itself. Keyboard Logo
 Fix clears that override so your own effect comes back. It never chooses a

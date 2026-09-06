@@ -2,6 +2,8 @@
 
 **简体中文** · [English](README.en.md)
 
+![Keyboard Logo Fix 白色陶瓷键盘与玻璃灯效](assets/readme-hero.png)
+
 macOS 会向部分 HID 键盘写入绿色指示灯状态，覆盖你在键盘上设置并保存的 LOGO
 灯效。Keyboard Logo Fix 用于解除这一覆盖，让你自己的灯效恢复显示。程序不会指定
 颜色或动画——恢复的始终是键盘中已经保存的那一套灯效。
