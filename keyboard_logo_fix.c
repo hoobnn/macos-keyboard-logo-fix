@@ -15,19 +15,22 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-#define T100_WIRED_VID 0x258a
-#define T100_WIRED_PID 0x010c
-#define T100_BLE_VID 0x3554
-#define T100_BLE_PID 0xfa07
-#define T100_KEYBOARD_USAGE 0x06
-#define T100_LOGO_UNLOCK 0x01
+#define COMPAT_WIRED_VID 0x258a
+#define COMPAT_WIRED_PID 0x010c
+#define COMPAT_BLE_VID 0x3554
+#define COMPAT_BLE_PID 0xfa07
+#define KEYBOARD_USAGE 0x06
+#define LOGO_UNLOCK_REPORT_VALUE 0x01
 
 /* Public since macOS 10.15; declarations normally live in IOHIDLib.h's
    hidsystem variant, which conflicts with the modern HID header above. */
 extern int IOHIDCheckAccess(int request_type);
 extern bool IOHIDRequestAccess(int request_type);
 #define HID_REQUEST_LISTEN_EVENT 1
-#define SERVICE_LABEL "local.codex.t100-logo-white"
+#define SERVICE_LABEL "com.ikuyu.keyboard-logo-fix"
+#define LEGACY_SERVICE_LABEL "local.codex.t100-logo-white"
+#define SETTINGS_DIRECTORY "KeyboardLogoFix"
+#define LEGACY_SETTINGS_DIRECTORY "T100Logo"
 
 extern char **environ;
 
@@ -66,27 +69,37 @@ static void xml_write_escaped(FILE *file, const char *text) {
     }
 }
 
+static int launch_agent_path(const char *label, char *path, size_t path_size) {
+    struct passwd *account = getpwuid(getuid());
+    if (!account || !account->pw_dir) return -1;
+    if (snprintf(path, path_size,
+                 "%s/Library/LaunchAgents/%s.plist",
+                 account->pw_dir, label) >= (int)path_size)
+        return -1;
+    return 0;
+}
+
 static int service_paths(char *plist_path, size_t plist_size,
                          char *log_path, size_t log_size) {
     struct passwd *account = getpwuid(getuid());
-    if (!account || !account->pw_dir) return -1;
-    if (snprintf(plist_path, plist_size,
-                 "%s/Library/LaunchAgents/%s.plist",
-                 account->pw_dir, SERVICE_LABEL) >= (int)plist_size)
+    if (!account || !account->pw_dir ||
+        launch_agent_path(SERVICE_LABEL, plist_path, plist_size) != 0)
         return -1;
-    if (snprintf(log_path, log_size, "%s/Library/Logs/T100Logo.log",
+    if (snprintf(log_path, log_size, "%s/Library/Logs/KeyboardLogoFix.log",
                  account->pw_dir) >= (int)log_size)
         return -1;
     return 0;
 }
 
-static int preference_path(char *path, size_t path_size, bool create_directory) {
+static int preference_path_for_directory(const char *directory,
+                                         char *path, size_t path_size,
+                                         bool create_directory) {
     struct passwd *account = getpwuid(getuid());
     if (!account || !account->pw_dir) return -1;
     char app_support[4096], settings_dir[4096];
     snprintf(app_support, sizeof(app_support), "%s/Library/Application Support",
              account->pw_dir);
-    snprintf(settings_dir, sizeof(settings_dir), "%s/T100Logo", app_support);
+    snprintf(settings_dir, sizeof(settings_dir), "%s/%s", app_support, directory);
     if (create_directory) {
         mkdir(app_support, 0755);
         mkdir(settings_dir, 0755);
@@ -94,6 +107,22 @@ static int preference_path(char *path, size_t path_size, bool create_directory) 
     if (snprintf(path, path_size, "%s/preferred-connection", settings_dir)
         >= (int)path_size)
         return -1;
+    return 0;
+}
+
+static int preference_path(char *path, size_t path_size, bool create_directory) {
+    return preference_path_for_directory(
+        SETTINGS_DIRECTORY, path, path_size, create_directory);
+}
+
+static int remove_background_service_named(const char *label) {
+    char plist_path[4096], domain[64];
+    if (launch_agent_path(label, plist_path, sizeof(plist_path)) != 0)
+        return 1;
+    snprintf(domain, sizeof(domain), "gui/%u", getuid());
+    char *bootout[] = {"launchctl", "bootout", domain, plist_path, NULL};
+    run_process("/bin/launchctl", bootout);
+    if (unlink(plist_path) != 0 && access(plist_path, F_OK) == 0) return 1;
     return 0;
 }
 
@@ -109,6 +138,9 @@ static int install_background_service(void) {
     snprintf(logs, sizeof(logs), "%s/Library/Logs", account->pw_dir);
     mkdir(launch_agents, 0755);
     mkdir(logs, 0755);
+
+    /* Stop the v0.1.x service before installing the renamed service. */
+    remove_background_service_named(LEGACY_SERVICE_LABEL);
 
     char temporary[4096];
     snprintf(temporary, sizeof(temporary), "%s.tmp", plist_path);
@@ -146,15 +178,10 @@ static int install_background_service(void) {
 }
 
 static int uninstall_background_service(void) {
-    char plist_path[4096], log_path[4096], domain[64];
-    if (service_paths(plist_path, sizeof(plist_path), log_path, sizeof(log_path)) != 0)
-        return 1;
-    snprintf(domain, sizeof(domain), "gui/%u", getuid());
-    char *bootout[] = {"launchctl", "bootout", domain, plist_path, NULL};
-    run_process("/bin/launchctl", bootout);
-    if (unlink(plist_path) != 0 && access(plist_path, F_OK) == 0) return 1;
-    fprintf(stderr, "Background service removed\n");
-    return 0;
+    int current_result = remove_background_service_named(SERVICE_LABEL);
+    int legacy_result = remove_background_service_named(LEGACY_SERVICE_LABEL);
+    fprintf(stderr, "Keyboard Logo Fix background service removed\n");
+    return current_result == 0 && legacy_result == 0 ? 0 : 1;
 }
 
 static long number_property(IOHIDDeviceRef device, CFStringRef key) {
@@ -171,31 +198,37 @@ static void print_io_error(const char *operation, IOReturn result) {
 }
 
 typedef enum {
-    T100_CONNECTION_NONE,
-    T100_CONNECTION_WIRED,
-    T100_CONNECTION_BLE
-} t100_connection;
+    KEYBOARD_CONNECTION_NONE,
+    KEYBOARD_CONNECTION_WIRED,
+    KEYBOARD_CONNECTION_BLE
+} keyboard_connection;
 
-static t100_connection load_preferred_connection(void) {
+static keyboard_connection load_preferred_connection(void) {
     char path[4096], value[32] = {0};
     if (preference_path(path, sizeof(path), false) != 0)
-        return T100_CONNECTION_NONE;
+        return KEYBOARD_CONNECTION_NONE;
     FILE *file = fopen(path, "r");
-    if (!file) return T100_CONNECTION_NONE;
+    if (!file) {
+        if (preference_path_for_directory(
+                LEGACY_SETTINGS_DIRECTORY, path, sizeof(path), false) != 0)
+            return KEYBOARD_CONNECTION_NONE;
+        file = fopen(path, "r");
+    }
+    if (!file) return KEYBOARD_CONNECTION_NONE;
     fgets(value, sizeof(value), file);
     fclose(file);
-    if (strncmp(value, "wired", 5) == 0) return T100_CONNECTION_WIRED;
-    if (strncmp(value, "ble", 3) == 0) return T100_CONNECTION_BLE;
-    return T100_CONNECTION_NONE;
+    if (strncmp(value, "wired", 5) == 0) return KEYBOARD_CONNECTION_WIRED;
+    if (strncmp(value, "ble", 3) == 0) return KEYBOARD_CONNECTION_BLE;
+    return KEYBOARD_CONNECTION_NONE;
 }
 
-static int save_preferred_connection(t100_connection connection) {
+static int save_preferred_connection(keyboard_connection connection) {
     char path[4096];
     if (preference_path(path, sizeof(path), true) != 0) return 1;
     FILE *file = fopen(path, "w");
     if (!file) return 1;
-    const char *value = connection == T100_CONNECTION_WIRED ? "wired\n"
-        : connection == T100_CONNECTION_BLE ? "ble\n" : "auto\n";
+    const char *value = connection == KEYBOARD_CONNECTION_WIRED ? "wired\n"
+        : connection == KEYBOARD_CONNECTION_BLE ? "ble\n" : "auto\n";
     int failed = fputs(value, file) == EOF || fclose(file) != 0;
     return failed ? 1 : 0;
 }
@@ -205,37 +238,37 @@ static io_connect_t power_root_port;
 static IONotificationPortRef power_notify_port;
 static io_object_t power_notifier;
 
-static t100_connection connection_for_device(IOHIDDeviceRef device) {
+static keyboard_connection connection_for_device(IOHIDDeviceRef device) {
     long vid = number_property(device, CFSTR(kIOHIDVendorIDKey));
     long pid = number_property(device, CFSTR(kIOHIDProductIDKey));
     long usage_page = number_property(device, CFSTR(kIOHIDPrimaryUsagePageKey));
     long usage = number_property(device, CFSTR(kIOHIDPrimaryUsageKey));
     long output_size = number_property(device, CFSTR(kIOHIDMaxOutputReportSizeKey));
-    if (usage_page != 1 || usage != T100_KEYBOARD_USAGE || output_size < 1)
-        return T100_CONNECTION_NONE;
-    if (vid == T100_WIRED_VID && pid == T100_WIRED_PID)
-        return T100_CONNECTION_WIRED;
-    if (vid == T100_BLE_VID && pid == T100_BLE_PID)
-        return T100_CONNECTION_BLE;
-    return T100_CONNECTION_NONE;
+    if (usage_page != 1 || usage != KEYBOARD_USAGE || output_size < 1)
+        return KEYBOARD_CONNECTION_NONE;
+    if (vid == COMPAT_WIRED_VID && pid == COMPAT_WIRED_PID)
+        return KEYBOARD_CONNECTION_WIRED;
+    if (vid == COMPAT_BLE_VID && pid == COMPAT_BLE_PID)
+        return KEYBOARD_CONNECTION_BLE;
+    return KEYBOARD_CONNECTION_NONE;
 }
 
 static int apply_to_device(IOHIDDeviceRef device, int seconds) {
-    t100_connection connection = connection_for_device(device);
-    if (connection == T100_CONNECTION_NONE) return 1;
+    keyboard_connection connection = connection_for_device(device);
+    if (connection == KEYBOARD_CONNECTION_NONE) return 1;
     IOReturn result = IOHIDDeviceOpen(device, kIOHIDOptionsTypeNone);
     if (result != kIOReturnSuccess && result != kIOReturnExclusiveAccess) {
         print_io_error("IOHIDDeviceOpen", result);
         return 1;
     }
-    uint8_t wired_report[] = {T100_LOGO_UNLOCK};
-    uint8_t ble_report[] = {0x01, T100_LOGO_UNLOCK};
-    const uint8_t *report = connection == T100_CONNECTION_BLE ? ble_report : wired_report;
-    CFIndex report_length = connection == T100_CONNECTION_BLE
+    uint8_t wired_report[] = {LOGO_UNLOCK_REPORT_VALUE};
+    uint8_t ble_report[] = {0x01, LOGO_UNLOCK_REPORT_VALUE};
+    const uint8_t *report = connection == KEYBOARD_CONNECTION_BLE ? ble_report : wired_report;
+    CFIndex report_length = connection == KEYBOARD_CONNECTION_BLE
         ? (CFIndex)sizeof(ble_report) : (CFIndex)sizeof(wired_report);
-    CFIndex report_id = connection == T100_CONNECTION_BLE ? 0x01 : 0x00;
-    fprintf(stderr, "Applying white breathing over %s for %d seconds\n",
-            connection == T100_CONNECTION_BLE ? "Bluetooth LE" : "USB", seconds);
+    CFIndex report_id = connection == KEYBOARD_CONNECTION_BLE ? 0x01 : 0x00;
+    fprintf(stderr, "Restoring saved logo effect over %s for %d seconds\n",
+            connection == KEYBOARD_CONNECTION_BLE ? "Bluetooth LE" : "USB", seconds);
     for (int i = 0; i < seconds * 20; i++) {
         result = IOHIDDeviceSetReport(
             device, kIOHIDReportTypeOutput, report_id, report, report_length);
@@ -249,9 +282,9 @@ static int apply_to_device(IOHIDDeviceRef device, int seconds) {
     return result == kIOReturnSuccess ? 0 : 1;
 }
 
-static IOHIDDeviceRef find_t100_keyboard(IOHIDManagerRef *manager_out,
-                                          t100_connection *connection_out,
-                                          t100_connection preferred) {
+static IOHIDDeviceRef find_compatible_keyboard(IOHIDManagerRef *manager_out,
+                                                keyboard_connection *connection_out,
+                                                keyboard_connection preferred) {
     IOHIDManagerRef manager =
         IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
     if (!manager) return NULL;
@@ -273,9 +306,9 @@ static IOHIDDeviceRef find_t100_keyboard(IOHIDManagerRef *manager_out,
         CFSetGetValues(devices, items);
         for (CFIndex i = 0; i < count; i++) {
             IOHIDDeviceRef candidate = (IOHIDDeviceRef)items[i];
-            t100_connection connection = connection_for_device(candidate);
-            if (connection != T100_CONNECTION_NONE &&
-                (preferred == T100_CONNECTION_NONE || connection == preferred)) {
+            keyboard_connection connection = connection_for_device(candidate);
+            if (connection != KEYBOARD_CONNECTION_NONE &&
+                (preferred == KEYBOARD_CONNECTION_NONE || connection == preferred)) {
                 found = candidate;
                 CFRetain(found);
                 *connection_out = connection;
@@ -288,8 +321,9 @@ static IOHIDDeviceRef find_t100_keyboard(IOHIDManagerRef *manager_out,
 
     if (!found) {
         fprintf(stderr,
-                "T100 not found (wired %04X:%04X or Bluetooth %04X:%04X)\n",
-                T100_WIRED_VID, T100_WIRED_PID, T100_BLE_VID, T100_BLE_PID);
+                "Compatible keyboard not found (wired %04X:%04X or Bluetooth %04X:%04X)\n",
+                COMPAT_WIRED_VID, COMPAT_WIRED_PID,
+                COMPAT_BLE_VID, COMPAT_BLE_PID);
         IOHIDManagerClose(manager, kIOHIDOptionsTypeNone);
         CFRelease(manager);
         return NULL;
@@ -299,15 +333,15 @@ static IOHIDDeviceRef find_t100_keyboard(IOHIDManagerRef *manager_out,
     return found;
 }
 
-static int restore_white_breathing(int seconds) {
+static int restore_saved_logo_effect(int seconds) {
     IOHIDManagerRef manager = NULL;
-    t100_connection connection = T100_CONNECTION_NONE;
-    t100_connection preferred = load_preferred_connection();
-    IOHIDDeviceRef device = find_t100_keyboard(&manager, &connection, preferred);
+    keyboard_connection connection = KEYBOARD_CONNECTION_NONE;
+    keyboard_connection preferred = load_preferred_connection();
+    IOHIDDeviceRef device = find_compatible_keyboard(&manager, &connection, preferred);
     if (!device) return 1;
 
     printf("Connection: %s; sending LOGO unlock for %d seconds...\n",
-           connection == T100_CONNECTION_BLE ? "Bluetooth LE" : "USB wired",
+           connection == KEYBOARD_CONNECTION_BLE ? "Bluetooth LE" : "USB wired",
            seconds);
     fflush(stdout);
     int result = apply_to_device(device, seconds);
@@ -324,12 +358,12 @@ static void apply_all_connected(void) {
     CFIndex count = CFSetGetCount(devices);
     const void **items = calloc((size_t)count, sizeof(*items));
     CFSetGetValues(devices, items);
-    t100_connection preferred = load_preferred_connection();
+    keyboard_connection preferred = load_preferred_connection();
     for (CFIndex i = 0; i < count; i++) {
         IOHIDDeviceRef device = (IOHIDDeviceRef)items[i];
-        t100_connection connection = connection_for_device(device);
-        if (connection != T100_CONNECTION_NONE &&
-            (preferred == T100_CONNECTION_NONE || connection == preferred))
+        keyboard_connection connection = connection_for_device(device);
+        if (connection != KEYBOARD_CONNECTION_NONE &&
+            (preferred == KEYBOARD_CONNECTION_NONE || connection == preferred))
             apply_to_device(device, 3);
     }
     free(items);
@@ -355,11 +389,11 @@ static void schedule_apply(double delay_seconds) {
 static void device_matched(void *context, IOReturn result, void *sender,
                            IOHIDDeviceRef device) {
     (void)context; (void)result; (void)sender;
-    t100_connection connection = connection_for_device(device);
-    t100_connection preferred = load_preferred_connection();
-    if (connection != T100_CONNECTION_NONE &&
-        (preferred == T100_CONNECTION_NONE || connection == preferred)) {
-        fprintf(stderr, "T100 connected; scheduling LOGO restore\n");
+    keyboard_connection connection = connection_for_device(device);
+    keyboard_connection preferred = load_preferred_connection();
+    if (connection != KEYBOARD_CONNECTION_NONE &&
+        (preferred == KEYBOARD_CONNECTION_NONE || connection == preferred)) {
+        fprintf(stderr, "Compatible keyboard connected; scheduling logo restore\n");
         schedule_apply(1.0);
         schedule_apply(5.0);
     }
@@ -409,7 +443,7 @@ static int run_daemon(void) {
         fprintf(stderr, "Warning: system wake notifications unavailable\n");
     }
     schedule_apply(1.0);
-    fprintf(stderr, "T100 LOGO background service started\n");
+    fprintf(stderr, "Keyboard Logo Fix background service started\n");
     CFRunLoopRun();
     return 0;
 }
@@ -430,9 +464,9 @@ static void scan_connection_status(bool *wired_present, bool *ble_present) {
         const void **items = calloc((size_t)count, sizeof(*items));
         CFSetGetValues(devices, items);
         for (CFIndex i = 0; i < count; i++) {
-            t100_connection connection = connection_for_device((IOHIDDeviceRef)items[i]);
-            if (connection == T100_CONNECTION_WIRED) *wired_present = true;
-            if (connection == T100_CONNECTION_BLE) *ble_present = true;
+            keyboard_connection connection = connection_for_device((IOHIDDeviceRef)items[i]);
+            if (connection == KEYBOARD_CONNECTION_WIRED) *wired_present = true;
+            if (connection == KEYBOARD_CONNECTION_BLE) *ble_present = true;
         }
         free(items);
         CFRelease(devices);
@@ -444,12 +478,12 @@ static void scan_connection_status(bool *wired_present, bool *ble_present) {
 static void show_result_message(bool success) {
     char *success_args[] = {
         "osascript", "-e",
-        "display notification \"灯效已应用，后台偏好已保存\" with title \"T100 LOGO 控制\"",
+        "display notification \"已恢复键盘保存的 LOGO 灯效，并保存后台连接偏好\" with title \"Keyboard Logo Fix\"",
         NULL
     };
     char *failure_args[] = {
         "osascript", "-e",
-        "display dialog \"未找到所选连接的 T100，请确认键盘已连接且未休眠。\" with title \"T100 LOGO 控制\" buttons {\"好\"} default button \"好\" with icon caution",
+        "display dialog \"未找到所选连接的兼容键盘，请确认键盘已连接且未休眠。\" with title \"Keyboard Logo Fix\" buttons {\"好\"} default button \"好\" with icon caution",
         NULL
     };
     run_process("/usr/bin/osascript", success ? success_args : failure_args);
@@ -463,14 +497,14 @@ static int run_selection_interface(void) {
              wired_present ? "已连接" : "未连接");
     snprintf(ble_label, sizeof(ble_label), "蓝牙 5.0 3554:FA07 — %s",
              ble_present ? "已连接" : "未连接");
-    const char *auto_label = "自动选择所有已连接的 T100";
-    t100_connection preferred = load_preferred_connection();
-    const char *default_label = preferred == T100_CONNECTION_WIRED ? wired_label
-        : preferred == T100_CONNECTION_BLE ? ble_label : auto_label;
+    const char *auto_label = "自动选择所有已连接的兼容键盘";
+    keyboard_connection preferred = load_preferred_connection();
+    const char *default_label = preferred == KEYBOARD_CONNECTION_WIRED ? wired_label
+        : preferred == KEYBOARD_CONNECTION_BLE ? ble_label : auto_label;
     snprintf(command, sizeof(command),
         "/usr/bin/osascript "
         "-e 'set picked to choose from list {\"%s\", \"%s\", \"%s\"} "
-        "with title \"T100 LOGO 控制\" "
+        "with title \"Keyboard Logo Fix\" "
         "with prompt \"请选择后台自动控制的连接方式：\" "
         "default items {\"%s\"} OK button name \"应用并保存\" cancel button name \"取消\"' "
         "-e 'if picked is false then return \"cancel\"' "
@@ -482,12 +516,12 @@ static int run_selection_interface(void) {
     int status = pclose(pipe);
     if (status != 0 || strncmp(selected, "cancel", 6) == 0) return 0;
 
-    t100_connection choice = T100_CONNECTION_NONE;
-    if (strncmp(selected, "USB", 3) == 0) choice = T100_CONNECTION_WIRED;
+    keyboard_connection choice = KEYBOARD_CONNECTION_NONE;
+    if (strncmp(selected, "USB", 3) == 0) choice = KEYBOARD_CONNECTION_WIRED;
     else if (strncmp(selected, "蓝牙", strlen("蓝牙")) == 0)
-        choice = T100_CONNECTION_BLE;
+        choice = KEYBOARD_CONNECTION_BLE;
     if (save_preferred_connection(choice) != 0) return 1;
-    int result = restore_white_breathing(3);
+    int result = restore_saved_logo_effect(3);
     show_result_message(result == 0);
     return result;
 }
@@ -529,5 +563,5 @@ int main(int argc, char **argv) {
         return 3;
     }
 
-    return restore_white_breathing(seconds);
+    return restore_saved_logo_effect(seconds);
 }

@@ -3,10 +3,10 @@
 <plist version="1.0">
 <dict>
     <key>Label</key>
-    <string>local.codex.t100-logo-white</string>
+    <string>com.ikuyu.keyboard-logo-fix</string>
     <key>ProgramArguments</key>
     <array>
-        <string>/Applications/T100 Logo 白色呼吸.app/Contents/MacOS/T100 Logo 白色呼吸</string>
+        <string>/Applications/Keyboard Logo Fix.app/Contents/MacOS/Keyboard Logo Fix</string>
         <string>--daemon</string>
     </array>
     <key>RunAtLoad</key>
@@ -16,8 +16,8 @@
     <key>ThrottleInterval</key>
     <integer>10</integer>
     <key>StandardOutPath</key>
-    <string>/tmp/T100Logo.log</string>
+    <string>/tmp/KeyboardLogoFix.log</string>
     <key>StandardErrorPath</key>
-    <string>/tmp/T100Logo.log</string>
+    <string>/tmp/KeyboardLogoFix.log</string>
 </dict>
 </plist>
