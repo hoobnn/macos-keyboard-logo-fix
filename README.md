@@ -1,9 +1,11 @@
-# T100 LOGO 白色呼吸（macOS）
+# macOS Keyboard Logo Fix
 
-这是为 T100 三模键盘编写的 macOS HID 小工具，支持：
+这是一个通过 macOS HID 输出报告恢复键盘 LOGO 灯效的小工具。当前已实机验证 T100 三模键盘，支持：
 
 - USB 有线：`VID:PID 258A:010C`
 - Bluetooth Low Energy：`VID:PID 3554:FA07`，设备名 `T100 5.0`
+
+使用相同 VID/PID 和输出报告协议的兼容键盘也可能直接适用。使用不同设备标识或报告协议的型号目前不会被程序识别，需要先确认其 HID 信息并增加对应设备配置。
 
 ## 下载
 
