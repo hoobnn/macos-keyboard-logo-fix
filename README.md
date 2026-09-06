@@ -1,112 +1,139 @@
 # Keyboard Logo Fix for macOS
 
-Keyboard Logo Fix 是一个 macOS HID 小工具，用于解除系统写入的绿色指示灯覆盖，并恢复键盘内部保存的用户自定义 LOGO 灯效。程序不会指定灯效颜色或动画。
+**English** · [简体中文](README.zh-CN.md)
 
-## 已验证键盘
+macOS writes a green indicator state to some HID keyboards, overriding the LOGO
+lighting effect you configured and saved on the keyboard itself. Keyboard Logo
+Fix clears that override so your own effect comes back. It never chooses a
+colour or an animation — the effect it restores is the one already stored in
+your keyboard.
 
-- SCC100；
-- FMate98。
+## Supported keyboards
 
-两个型号均使用程序当前支持的 HID 标识与输出报告协议：
+- **SCC100** — verified on hardware
+- **FMate98** — verified through user reports
 
-- USB 有线：`VID:PID 258A:010C`；
-- Bluetooth Low Energy：`VID:PID 3554:FA07`，可能显示为 `T100 5.0`。
+Both expose the HID identifiers and output report protocol this tool speaks:
 
-这里的 `T100` 是设备向 macOS 暴露的控制器识别信息，并非实体键盘型号。其他使用相同 VID/PID 和报告协议的键盘也可能适用，但仍需实机确认；使用不同标识或协议的设备目前不会被程序识别。
+| Connection | VID:PID | Notes |
+| --- | --- | --- |
+| USB wired | `258A:010C` | |
+| Bluetooth LE | `3554:FA07` | may appear as `T100 5.0` |
 
-## 下载与安装
+`T100` is the controller identification the device reports to macOS, not a
+physical keyboard model. Other keyboards using the same VID/PID and report
+protocol may also work, but need confirmation on real hardware. Devices with
+different identifiers or protocols are not recognised.
 
-从仓库的 [Releases](../../releases) 页面下载最新的 `Keyboard-Logo-Fix-0.2.0-macOS.zip`：
+## Install
 
-1. 解压并将 `Keyboard Logo Fix.app` 拖入“应用程序”文件夹；
-2. 双击 App，在连接选择窗口中选择自动、USB 或蓝牙；
-3. 首次运行如被 macOS 拦截，在“系统设置 → 隐私与安全性”中选择“仍要打开”；
-4. 在“系统设置 → 隐私与安全性 → 输入监控”中允许该 App，然后重新打开。
+Download the latest `Keyboard-Logo-Fix-<version>-macOS.zip` from the
+[Releases](../../releases) page, then:
 
-从 `0.1.x` 升级时，新版首次启动会停止并移除旧的 `local.codex.t100-logo-white` 后台服务，并继续读取旧版保存的连接偏好。旧的 `T100 Logo 白色呼吸.app` 文件不会被自动删除，可以手动移入废纸篓。
+1. Unzip it and drag **Keyboard Logo Fix.app** into your Applications folder.
+2. Open the app and choose a connection: automatic, USB, or Bluetooth.
+3. If macOS blocks the first launch, go to **System Settings → Privacy &
+   Security** and choose **Open Anyway**.
+4. Allow the app under **System Settings → Privacy & Security → Input
+   Monitoring**, then reopen it.
 
-## 工作方式
+### Upgrading from 0.1.x
 
-App 首次打开时会安装用户级 LaunchAgent：
+The first launch of a newer version stops and removes the old
+`local.codex.t100-logo-white` background service, and keeps reading the
+connection preference saved by the old version. The old
+`T100 Logo 白色呼吸.app` is not deleted automatically — move it to the Trash
+yourself.
+
+## How it works
+
+Opening the app installs a per-user LaunchAgent:
 
 ```text
 ~/Library/LaunchAgents/com.ikuyu.keyboard-logo-fix.plist
 ```
 
-后台程序随用户登录启动并保持运行，平时只监听兼容键盘连接和 Mac 唤醒事件，不会持续向键盘发送指令。发生以下事件时，它会短暂发送恢复报告：
+The background service starts at login and keeps running, but stays idle:
+it only listens for compatible keyboards connecting and for the Mac waking.
+It briefly sends the restore report when any of these happen:
 
-- 后台服务启动；
-- 兼容键盘连接或重新连接；
-- Mac 从睡眠中唤醒。
+- the background service starts,
+- a compatible keyboard connects or reconnects,
+- the Mac wakes from sleep.
 
-每次触发会以 50 ms 间隔发送约 3 秒，即约 60 次。重复发送用于覆盖 macOS 在设备初始化期间再次写入绿色指示状态的情况。报告只解除指示灯覆盖，使键盘恢复此前由用户手动设置并保存在键盘中的 LOGO 灯效。
+Each trigger sends for about 3 seconds at 50 ms intervals — roughly 60 reports.
+The repetition is what outlasts macOS writing the green indicator state again
+while the device initialises. The report only clears the indicator override,
+letting the keyboard fall back to the LOGO effect you saved on it.
 
-程序不会刷写固件、修改按键映射、记录按键或访问网络。
+The tool does not flash firmware, remap keys, log keystrokes, or use the
+network.
 
-连接偏好与日志分别保存在：
+Preferences and logs live at:
 
 ```text
 ~/Library/Application Support/KeyboardLogoFix/preferred-connection
 ~/Library/Logs/KeyboardLogoFix.log
 ```
 
-## 命令行使用
-
-后台模式：
+## Command line
 
 ```sh
-./keyboard-logo-fix --daemon
+./keyboard-logo-fix            # install the service and pick a connection
+./keyboard-logo-fix 10         # restore once for 10 seconds (range 1–300)
+./keyboard-logo-fix --daemon   # run the background service in the foreground
+./keyboard-logo-fix --uninstall # remove current and 0.1.x background services
+./keyboard-logo-fix --help     # usage
 ```
 
-手动发送指定秒数，范围为 1–300：
+Uninstalling the service leaves the app, the connection preference, and the
+log in place.
+
+## Build from source
+
+Requires the Xcode Command Line Tools. The default build produces a universal
+binary for Apple Silicon and Intel Macs:
 
 ```sh
-./keyboard-logo-fix 10
+make            # build ./keyboard-logo-fix
+make app        # package dist/Keyboard Logo Fix.app
+make clean
 ```
 
-卸载新版和旧版后台服务：
+`com.ikuyu.keyboard-logo-fix.plist` is a manual LaunchAgent template for use
+once the app lives in `/Applications`.
 
-```sh
-./keyboard-logo-fix --uninstall
-```
+### Source layout
 
-卸载命令不会删除 App、连接偏好或日志。
+| File | Responsibility |
+| --- | --- |
+| `src/main.c` | argument parsing and entry points |
+| `src/keyboard.c` | HID device matching and sending the unlock report |
+| `src/daemon.c` | background service: run loop, device and wake callbacks |
+| `src/service.c` | installing and removing the LaunchAgent |
+| `src/settings.c` | reading and writing the connection preference |
+| `src/ui.c` | the connection picker and result dialogs |
+| `src/platform.c` | process spawning, path building, XML escaping |
+| `src/app_config.h` | bundle identifiers and shared constants |
 
-## 从源码构建
+## Releases
 
-需要安装 Xcode Command Line Tools。默认生成同时支持 Apple Silicon 和 Intel Mac 的通用程序：
-
-```sh
-make
-./keyboard-logo-fix 10
-```
-
-打包 App：
-
-```sh
-make app
-```
-
-产物位于：
-
-```text
-dist/Keyboard Logo Fix.app
-```
-
-`com.ikuyu.keyboard-logo-fix.plist` 是 App 位于系统“应用程序”文件夹时可使用的手动 LaunchAgent 模板。
-
-## 自动构建与发布
-
-GitHub Actions 会在每次推送和 Pull Request 时构建并校验 App，构建产物可从对应 workflow run 下载。推送 `v*` 标签时会自动创建 GitHub Release：
+GitHub Actions builds and verifies the app on every push and pull request;
+artifacts are downloadable from the workflow run. Pushing a `v*` tag creates a
+GitHub Release:
 
 ```sh
 git tag v0.2.0
 git push origin v0.2.0
 ```
 
-## 已知限制
+## Known limitations
 
-- SCC100 已实测，FMate98 由用户反馈验证有效；
-- 当前只匹配 USB `258A:010C` 和 BLE `3554:FA07`；
-- 尚未验证其他蓝牙配置或 2.4G 接收器；
-- App 使用临时签名且未经过 Apple 公证，其他用户首次运行时需要手动允许。
+- Only USB `258A:010C` and BLE `3554:FA07` are matched.
+- Other Bluetooth pairings and 2.4 GHz receivers are untested.
+- The app is ad-hoc signed and not notarised by Apple, so other users must
+  allow it manually on first launch.
+
+## License
+
+[MIT](LICENSE)
