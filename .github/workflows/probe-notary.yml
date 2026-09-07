@@ -1,0 +1,49 @@
+name: Probe notary credentials
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: macos-15
+    steps:
+      - name: Inspect credential shapes
+        env:
+          KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+        run: |
+          set -uo pipefail
+          # Report shapes only — never the values themselves.
+          echo "KEY_ID    length=${#KEY_ID}  (expected 10)"
+          echo "ISSUER_ID length=${#ISSUER_ID} (expected 36, UUID)"
+          if [[ "$ISSUER_ID" =~ ^[0-9a-fA-F-]{36}$ ]]; then
+            echo "ISSUER_ID looks like a UUID ✅"
+          else
+            echo "::warning::ISSUER_ID is not a 36-char UUID ❌"
+          fi
+          if [[ "$KEY_ID" =~ ^[0-9A-Z]{10}$ ]]; then
+            echo "KEY_ID looks like a key id ✅"
+          else
+            echo "::warning::KEY_ID is not 10 alphanumerics ❌"
+          fi
+
+          echo -n "$KEY_P8" | base64 --decode -o /tmp/key.p8 2>/dev/null \
+            && echo "P8 base64 decodes ✅" || echo "::warning::P8 base64 is invalid ❌"
+          if head -1 /tmp/key.p8 2>/dev/null | grep -q "BEGIN PRIVATE KEY"; then
+            echo "P8 has a PKCS#8 header ✅"
+          else
+            echo "::warning::P8 does not start with BEGIN PRIVATE KEY ❌"
+            echo "first line: $(head -c 40 /tmp/key.p8 2>/dev/null | tr -d '\n')"
+          fi
+          openssl pkey -in /tmp/key.p8 -noout 2>/dev/null \
+            && echo "P8 parses as a private key ✅" || echo "::warning::P8 is not a valid key ❌"
+
+      - name: Live auth check
+        env:
+          KEY_ID: ${{ secrets.APPLE_NOTARY_KEY_ID }}
+          ISSUER_ID: ${{ secrets.APPLE_NOTARY_ISSUER_ID }}
+          KEY_P8: ${{ secrets.APPLE_NOTARY_KEY_P8_BASE64 }}
+        run: |
+          set -uo pipefail
+          echo -n "$KEY_P8" | base64 --decode -o /tmp/key.p8
+          xcrun notarytool history --key /tmp/key.p8 \
+            --key-id "$KEY_ID" --issuer "$ISSUER_ID" 2>&1 | head -20
+          rm -f /tmp/key.p8
