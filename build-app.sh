@@ -32,8 +32,19 @@ make_icon 1024 icon_512x512@2x.png
 rm -rf "$iconset_dir"
 
 xattr -cr "$app_dir"
-codesign --force --deep --sign - \
-    --identifier com.ikuyu.keyboard-logo-fix "$app_dir"
+
+# CI exports a real Developer ID; locally we fall back to ad-hoc so the app
+# still launches on the machine that built it.
+sign_identity="${APPLE_SIGN_IDENTITY_APPLICATION:--}"
+codesign_opts=(--force --sign "$sign_identity" \
+    --identifier com.ikuyu.keyboard-logo-fix)
+if [[ "$sign_identity" != "-" ]]; then
+    # Notarization rejects anything without hardened runtime, and an untimestamped
+    # signature stops validating once the certificate expires.
+    codesign_opts+=(--options runtime --timestamp)
+fi
+
+codesign "${codesign_opts[@]}" "$app_dir"
 codesign --verify --deep --strict --verbose=2 "$app_dir"
 
 echo "Built: $app_dir"

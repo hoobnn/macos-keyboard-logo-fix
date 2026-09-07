@@ -13,60 +13,36 @@ permissions:
   contents: write
 
 jobs:
-  build:
-    runs-on: macos-14
+  # Signed, notarized build. Needs secrets, so it is skipped on forks.
+  release:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: hoobnn/ci-workflows/.github/workflows/macos-release.yml@v1
+    with:
+      app-path: "dist/Keyboard Logo Fix.app"
+      build-command: make app
+      artifact-basename: Keyboard-Logo-Fix
+      make-dmg: true
+      dmg-volume-name: Keyboard Logo Fix
+    secrets: inherit
 
+  # Fork PRs cannot sign; still verify the build and the bundle layout.
+  verify-unsigned:
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: macos-15
     steps:
-      - name: Check out source
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v4
 
-      - name: Build universal app
+      - name: Build (ad-hoc signature)
         run: make app
 
-      - name: Verify app
+      - name: Verify bundle
         run: |
+          set -euo pipefail
           APP="dist/Keyboard Logo Fix.app"
-          lipo -archs "$APP/Contents/MacOS/Keyboard Logo Fix" | grep -q arm64
-          lipo -archs "$APP/Contents/MacOS/Keyboard Logo Fix" | grep -q x86_64
+          BIN="$APP/Contents/MacOS/Keyboard Logo Fix"
+          lipo -archs "$BIN" | grep -q arm64
+          lipo -archs "$BIN" | grep -q x86_64
           plutil -lint "$APP/Contents/Info.plist"
           test "$(plutil -extract CFBundleIconFile raw "$APP/Contents/Info.plist")" = "KeyboardLogoFix.icns"
           test -f "$APP/Contents/Resources/KeyboardLogoFix.icns"
           codesign --verify --deep --strict --verbose=2 "$APP"
-
-      - name: Package app
-        id: package
-        run: |
-          VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" Info.plist)
-          ARCHIVE="dist/Keyboard-Logo-Fix-${VERSION}-macOS.zip"
-          ditto -c -k --sequesterRsrc --keepParent \
-            "dist/Keyboard Logo Fix.app" \
-            "$ARCHIVE"
-          shasum -a 256 "$ARCHIVE" > "${ARCHIVE}.sha256"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "archive=$ARCHIVE" >> "$GITHUB_OUTPUT"
-
-      - name: Upload workflow artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: Keyboard-Logo-Fix-${{ steps.package.outputs.version }}-macOS
-          path: |
-            ${{ steps.package.outputs.archive }}
-            ${{ steps.package.outputs.archive }}.sha256
-
-      - name: Publish GitHub release
-        if: startsWith(github.ref, 'refs/tags/v')
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" \
-              "${{ steps.package.outputs.archive }}" \
-              "${{ steps.package.outputs.archive }}.sha256" \
-              --clobber
-          else
-            gh release create "$GITHUB_REF_NAME" \
-              "${{ steps.package.outputs.archive }}" \
-              "${{ steps.package.outputs.archive }}.sha256" \
-              --generate-notes \
-              --title "$GITHUB_REF_NAME"
-          fi
