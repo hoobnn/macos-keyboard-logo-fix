@@ -3,6 +3,7 @@
 #include <mach-o/dyld.h>
 #include <pwd.h>
 #include <stdarg.h>
+#include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,6 +26,39 @@ int run_process(const char *path, char *const arguments[]) {
     int status = 0;
     if (waitpid(child, &status, 0) < 0) return -1;
     return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+bool capture_process_output(const char *path, char *const arguments[],
+                            char *output, size_t output_size) {
+    int channel[2];
+    if (pipe(channel) != 0) return false;
+
+    pid_t child = fork();
+    if (child < 0) {
+        close(channel[0]);
+        close(channel[1]);
+        return false;
+    }
+    if (child == 0) {
+        close(channel[0]);
+        dup2(channel[1], STDOUT_FILENO);
+        close(channel[1]);
+        execve(path, arguments, environ);
+        _exit(127);
+    }
+
+    close(channel[1]);
+    ssize_t length = read(channel[0], output, output_size - 1);
+    close(channel[0]);
+
+    int status = 0;
+    if (waitpid(child, &status, 0) < 0) return false;
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0 || length <= 0)
+        return false;
+
+    output[length] = '\0';
+    output[strcspn(output, "\n")] = '\0';
+    return true;
 }
 
 int executable_path(char *output, size_t output_size) {

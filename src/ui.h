@@ -7,4 +7,9 @@
    user cancels. */
 int run_selection_interface(void);
 
+/* Explains that Input Monitoring is missing and offers to open the matching
+   System Settings pane. Called when the permission check fails on a path the
+   user reached by double-clicking, where stderr would go unseen. */
+void show_permission_required_dialog(void);
+
 #endif

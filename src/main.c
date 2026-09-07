@@ -34,6 +34,8 @@ static int run_app_launch(void) {
     }
     if (!ensure_input_monitoring_access()) {
         fprintf(stderr, "Input Monitoring permission is required\n");
+        /* Nobody sees stderr on this path, so say it in the UI instead. */
+        show_permission_required_dialog();
         return EXIT_NO_PERMISSION;
     }
     return run_selection_interface();

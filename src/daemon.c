@@ -16,7 +16,11 @@
 #define DEVICE_RETRY_DELAYS {1.0, 5.0}
 #define WAKE_RETRY_DELAYS {2.0, 8.0}
 #define STARTUP_DELAY 1.0
+
+/* Permission can stay missing for the whole session, so the poll keeps its
+   pace but the logging backs off to avoid growing the log file unbounded. */
 #define PERMISSION_POLL_SECONDS 5
+#define PERMISSION_LOG_BACKOFF 12
 
 static IOHIDManagerRef daemon_manager;
 static io_connect_t power_root_port;
@@ -89,8 +93,11 @@ static void register_for_power_notifications(void) {
 int run_daemon(void) {
     /* launchd starts the agent at login, which can precede the user granting
        Input Monitoring, so wait rather than exiting. */
-    while (IOHIDCheckAccess(HID_REQUEST_LISTEN_EVENT) != 0) {
-        fprintf(stderr, "Waiting for Input Monitoring permission...\n");
+    for (unsigned long attempt = 0;
+         IOHIDCheckAccess(HID_REQUEST_LISTEN_EVENT) != 0; attempt++) {
+        /* Log the first attempt, then once per minute at the poll interval. */
+        if (attempt % PERMISSION_LOG_BACKOFF == 0)
+            fprintf(stderr, "Waiting for Input Monitoring permission...\n");
         sleep(PERMISSION_POLL_SECONDS);
     }
 

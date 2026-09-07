@@ -12,6 +12,12 @@
    could not be started or did not exit normally. */
 int run_process(const char *path, char *const arguments[]);
 
+/* Runs `path` and copies its standard output into `output`, trimmed of the
+   trailing newline. Returns false if the process could not be run, exited
+   non-zero, or produced nothing. */
+bool capture_process_output(const char *path, char *const arguments[],
+                            char *output, size_t output_size);
+
 /* Resolves the absolute, symlink-free path of the running executable. */
 int executable_path(char *output, size_t output_size);
 

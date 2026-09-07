@@ -10,6 +10,15 @@
 #include "settings.h"
 
 #define OSASCRIPT_PATH "/usr/bin/osascript"
+#define OPEN_PATH "/usr/bin/open"
+
+/* Deep link to the Input Monitoring list, so the user lands on the exact pane
+   instead of hunting through Privacy & Security. */
+#define INPUT_MONITORING_PANE_URL \
+    "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent"
+
+/* Matched against the dialog's reply, so it must stay in sync with the button. */
+#define OPEN_SETTINGS_BUTTON "打开设置"
 
 /* User-facing strings are Chinese to match the shipped app's audience. */
 #define AUTO_LABEL "自动选择所有已连接的兼容键盘"
@@ -18,6 +27,32 @@
 
 /* How long the one-off restore after the picker runs. */
 #define APPLY_SECONDS_INTERACTIVE 3
+
+/* Without Input Monitoring the HID calls fail with kIOReturnUnsupported, and a
+   double-clicked app has no stderr the user can see, so explain it in a dialog
+   and offer to jump straight to the pane. */
+void show_permission_required_dialog(void) {
+    char *dialog_args[] = {
+        "osascript", "-e",
+        "display dialog \"" APP_DISPLAY_NAME
+        " 需要「输入监控」权限才能向键盘发送 HID 指令。\n\n"
+        "请在「系统设置 → 隐私与安全性 → 输入监控」中勾选 "
+        APP_DISPLAY_NAME "，然后重新打开本应用。\" "
+        "with title \"" APP_DISPLAY_NAME "\" "
+        "buttons {\"稍后\", \"" OPEN_SETTINGS_BUTTON "\"} "
+        "default button \"" OPEN_SETTINGS_BUTTON "\" "
+        "with icon caution",
+        NULL
+    };
+    /* Both buttons exit zero, so the choice has to be read from the reply. */
+    char reply[128] = {0};
+    if (!capture_process_output(OSASCRIPT_PATH, dialog_args, reply, sizeof(reply)))
+        return;
+    if (!strstr(reply, OPEN_SETTINGS_BUTTON)) return;
+
+    char *open_args[] = {"open", INPUT_MONITORING_PANE_URL, NULL};
+    run_process(OPEN_PATH, open_args);
+}
 
 static void show_result_message(bool success) {
     char *success_args[] = {
