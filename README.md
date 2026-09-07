@@ -113,8 +113,8 @@ GitHub Actions 会在每次推送和 Pull Request 时构建并校验 App，构�
 workflow run 下载。推送 `v*` 标签时会自动创建 GitHub Release：
 
 ```sh
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
 ## 已知限制

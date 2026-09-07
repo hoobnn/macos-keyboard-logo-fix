@@ -3,7 +3,7 @@ set -euo pipefail
 
 root_dir="${0:A:h}"
 app_dir="$root_dir/dist/Keyboard Logo Fix.app"
-icon_source="$root_dir/assets/keyboard-logo-fix-icon-1024.png"
+icon_source="$root_dir/assets/keyboard-logo-fix-icon-heartbeat-1024.png"
 iconset_dir="$root_dir/dist/KeyboardLogoFix.iconset"
 
 mkdir -p "$app_dir/Contents/MacOS" "$app_dir/Contents/Resources"
