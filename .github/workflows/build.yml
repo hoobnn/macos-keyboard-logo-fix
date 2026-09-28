@@ -25,6 +25,62 @@ jobs:
       dmg-volume-name: Keyboard Logo Fix
     secrets: inherit
 
+  # 发版后把新 dmg 的 sha256 写进 hoobnn/homebrew-tap 的 cask。
+  # 需要仓库 secret HOMEBREW_TAP_TOKEN（对 homebrew-tap 有 Contents 读写权限）。
+  homebrew:
+    name: Update Homebrew tap
+    needs: release
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Fetch released dmg checksum
+        id: checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.release.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release download "$GITHUB_REF_NAME" -R "$GITHUB_REPOSITORY" \
+            --pattern "Keyboard-Logo-Fix-${VERSION}-macOS.dmg.sha256" \
+            --dir "$RUNNER_TEMP"
+          SHA=$(awk '{print $1}' "$RUNNER_TEMP/Keyboard-Logo-Fix-${VERSION}-macOS.dmg.sha256")
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: 🍺 Sync cask
+        env:
+          HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          VERSION: ${{ needs.release.outputs.version }}
+          DMG_SHA: ${{ steps.checksum.outputs.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${HOMEBREW_TAP_TOKEN:-}" ]; then
+            echo "::warning::HOMEBREW_TAP_TOKEN not set; skipping tap sync."
+            exit 0
+          fi
+
+          TAP_DIR="$RUNNER_TEMP/homebrew-tap"
+          git clone --depth 1 \
+            "https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/hoobnn/homebrew-tap.git" \
+            "$TAP_DIR"
+
+          CASK="$TAP_DIR/Casks/keyboard-logo-fix.rb"
+          sed -i -E \
+            -e "s/^(  version \")[^\"]+(\")/\1${VERSION}\2/" \
+            -e "s/^(  sha256 \")[^\"]+(\")/\1${DMG_SHA}\2/" \
+            "$CASK"
+
+          cd "$TAP_DIR"
+          if git diff --quiet; then
+            echo "Cask already at ${VERSION}; nothing to do."
+            exit 0
+          fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Casks/keyboard-logo-fix.rb
+          git commit -m "⬆️ arrow-up(keyboard-logo-fix): bump cask to ${VERSION}"
+          git push origin HEAD
+
   # Fork PRs cannot sign; still verify the build and the bundle layout.
   verify-unsigned:
     if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository

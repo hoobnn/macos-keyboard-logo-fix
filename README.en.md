@@ -29,10 +29,17 @@ different identifiers or protocols are not recognised.
 
 ## Install
 
-Download the latest `Keyboard-Logo-Fix-<version>-macOS.zip` from the
+Install with Homebrew:
+
+```sh
+brew install --cask hoobnn/tap/keyboard-logo-fix
+```
+
+Or download the latest `Keyboard-Logo-Fix-<version>-macOS.zip` from the
 [Releases](../../releases) page, then:
 
-1. Unzip it and drag **Keyboard Logo Fix.app** into your Applications folder.
+1. Unzip it and drag **Keyboard Logo Fix.app** into your Applications folder
+   (skip this step when installing with Homebrew).
 2. Open the app and choose a connection: automatic, USB, or Bluetooth.
 3. If macOS blocks the first launch, go to **System Settings → Privacy &
    Security** and choose **Open Anyway**.

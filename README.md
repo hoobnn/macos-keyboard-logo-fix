@@ -26,10 +26,16 @@ VID/PID 和报告协议的键盘也可能适用，但仍需实机确认；使用
 
 ## 下载与安装
 
-从仓库的 [Releases](../../releases) 页面下载最新的
+用 Homebrew 安装：
+
+```sh
+brew install --cask hoobnn/tap/keyboard-logo-fix
+```
+
+或者从仓库的 [Releases](../../releases) 页面下载最新的
 `Keyboard-Logo-Fix-<版本号>-macOS.zip`，然后：
 
-1. 解压并将 **Keyboard Logo Fix.app** 拖入“应用程序”文件夹；
+1. 解压并将 **Keyboard Logo Fix.app** 拖入“应用程序”文件夹（用 Homebrew 安装可跳过这一步）；
 2. 双击 App，在连接选择窗口中选择自动、USB 或蓝牙；
 3. 首次运行如被 macOS 拦截，在**系统设置 → 隐私与安全性**中选择**仍要打开**；
 4. 在**系统设置 → 隐私与安全性 → 输入监控**中允许该 App，然后重新打开。
