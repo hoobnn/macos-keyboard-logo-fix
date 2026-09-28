@@ -2,3 +2,7 @@ keyboard-logo-fix
 dist/
 .DS_Store
 node_modules/
+
+# 单元测试产物
+tests/run-tests
+tests/run-tests.dSYM/
