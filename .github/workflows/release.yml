@@ -24,7 +24,7 @@ jobs:
     needs: test
     permissions:
       contents: write
-    uses: hoobnn/ci-workflows/.github/workflows/macos-release.yml@v1-next
+    uses: hoobnn/ci-workflows/.github/workflows/macos-release.yml@v1
     with:
       app-path: "dist/Keyboard Logo Fix.app"
       build-command: make app
@@ -36,7 +36,7 @@ jobs:
   homebrew:
     needs: release
     if: startsWith(github.ref, 'refs/tags/v')
-    uses: hoobnn/ci-workflows/.github/workflows/homebrew-cask.yml@v1-next
+    uses: hoobnn/ci-workflows/.github/workflows/homebrew-cask.yml@v1
     with:
       cask: keyboard-logo-fix
       artifact-basename: Keyboard-Logo-Fix
