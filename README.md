@@ -93,6 +93,7 @@ App 首次打开时会安装用户级 LaunchAgent：
 
 ```sh
 make            # 构建 ./keyboard-logo-fix
+make test       # 运行单元测试
 make app        # 打包 dist/Keyboard Logo Fix.app
 make clean
 ```
@@ -115,19 +116,22 @@ make clean
 
 ## 自动构建与发布
 
-GitHub Actions 会在每次推送和 Pull Request 时构建并校验 App，构建产物可从对应
-workflow run 下载。推送 `v*` 标签时会自动创建 GitHub Release：
+推送 main 和 Pull Request 时，GitHub Actions 运行单元测试并校验未签名构建
+（`.github/workflows/ci.yml`）。推送 `v*` 标签时先跑同一套测试，再签名、公证、
+发布 GitHub Release，并更新 Homebrew cask（`.github/workflows/release.yml`）：
 
 ```sh
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.2.5
+git push origin v0.2.5
 ```
+
+本地跑测试：`make test`。完整发布步骤见 [docs/RELEASE.md](docs/RELEASE.md)。
 
 ## 已知限制
 
 - 当前只匹配 USB `258A:010C` 和 BLE `3554:FA07`；
 - 尚未验证其他蓝牙配置或 2.4G 接收器；
-- App 使用临时签名且未经过 Apple 公证，其他用户首次运行时需要手动允许。
+- 首次运行需要在“输入监控”中手动授权。
 
 ## 许可协议
 

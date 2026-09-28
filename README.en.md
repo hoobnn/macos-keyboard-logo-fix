@@ -105,6 +105,7 @@ binary for Apple Silicon and Intel Macs:
 
 ```sh
 make            # build ./keyboard-logo-fix
+make test       # run the unit tests
 make app        # package dist/Keyboard Logo Fix.app
 make clean
 ```
@@ -127,21 +128,24 @@ once the app lives in `/Applications`.
 
 ## Releases
 
-GitHub Actions builds and verifies the app on every push and pull request;
-artifacts are downloadable from the workflow run. Pushing a `v*` tag creates a
-GitHub Release:
+Pushes to main and pull requests run the unit tests and verify an unsigned
+build (`.github/workflows/ci.yml`). Pushing a `v*` tag runs the same tests, then
+signs, notarises and publishes a GitHub Release and updates the Homebrew cask
+(`.github/workflows/release.yml`):
 
 ```sh
-git tag v0.2.2
-git push origin v0.2.2
+git tag v0.2.5
+git push origin v0.2.5
 ```
+
+Run the tests locally with `make test`. See [docs/RELEASE.md](docs/RELEASE.md)
+for the full release steps.
 
 ## Known limitations
 
 - Only USB `258A:010C` and BLE `3554:FA07` are matched.
 - Other Bluetooth pairings and 2.4 GHz receivers are untested.
-- The app is ad-hoc signed and not notarised by Apple, so other users must
-  allow it manually on first launch.
+- Input Monitoring must be granted manually on first launch.
 
 ## License
 

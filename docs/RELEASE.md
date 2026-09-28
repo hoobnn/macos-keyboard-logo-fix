@@ -1,8 +1,9 @@
 # 发布流程
 
-打 `v*` 标签即触发 CI：构建 → Developer ID 签名 → Apple 公证 → 生成 zip/dmg → 发布 GitHub Release。
+打 `v*` 标签即触发 `.github/workflows/release.yml`：单元测试 → 构建 → Developer ID 签名 → Apple 公证 → 生成 zip/dmg → 发布 GitHub Release → 更新 Homebrew cask。
 
-签名与公证逻辑放在 [`hoobnn/ci-workflows`](https://github.com/hoobnn/ci-workflows)，本仓库只描述"怎么构建"。
+签名、公证与 cask 同步逻辑放在 [`hoobnn/ci-workflows`](https://github.com/hoobnn/ci-workflows)，本仓库只描述"怎么构建"。
+平时推送 main 和 PR 只跑 `.github/workflows/ci.yml`（单元测试 + 未签名构建校验），不签名。
 
 ## 一次性配置
 
@@ -40,6 +41,7 @@ base64 -i AuthKey_XXXXXXXX.p8 | pbcopy
 | `APPLE_NOTARY_KEY_ID` | API Key ID，如 `2X9R4HXF34` |
 | `APPLE_NOTARY_ISSUER_ID` | Issuer ID（UUID） |
 | `APPLE_NOTARY_KEY_P8_BASE64` | 步骤 2 的 base64 |
+| `HOMEBREW_TAP_TOKEN` | fine-grained token，只授权 `hoobnn/homebrew-tap` 的 Contents 读写；缺失时发版失败 |
 
 做 `.pkg` 分发时再加（Developer ID **Installer** 证书）：
 
