@@ -1,31 +1,30 @@
-# Keyboard Logo Fix for macOS
+# Keyboard Logo Fix: get your keyboard's logo lighting back on macOS
 
 [简体中文](README.md) · **English**
 
-![Keyboard Logo Fix white ceramic keyboard with glass lighting](assets/readme-hero.png)
+![White ceramic keyboard with its logo lit in a custom effect](assets/readme-hero.png)
 
-macOS writes a green indicator state to some HID keyboards, overriding the LOGO
-lighting effect you configured and saved on the keyboard itself. Keyboard Logo
-Fix clears that override so your own effect comes back. It never chooses a
-colour or an animation — the effect it restores is the one already stored in
-your keyboard.
+When some HID keyboards are plugged into a Mac, macOS writes a green indicator
+state to them, which hides the LOGO lighting effect you saved on the keyboard.
+Keyboard Logo Fix clears that override and nothing else. It doesn't set a
+colour or an animation; you get back whatever effect is stored on the keyboard.
 
 ## Supported keyboards
 
-- **SCC100** — verified on hardware
-- **FMate98** — verified through user reports
+- SCC100: tested on real hardware
+- FMate98: confirmed working by a user
 
-Both expose the HID identifiers and output report protocol this tool speaks:
+Both use the same HID identifiers and output report protocol:
 
 | Connection | VID:PID | Notes |
 | --- | --- | --- |
 | USB wired | `258A:010C` | |
 | Bluetooth LE | `3554:FA07` | may appear as `T100 5.0` |
 
-`T100` is the controller identification the device reports to macOS, not a
-physical keyboard model. Other keyboards using the same VID/PID and report
-protocol may also work, but need confirmation on real hardware. Devices with
-different identifiers or protocols are not recognised.
+`T100` is the name the keyboard's controller reports to macOS, not a keyboard
+model. Other keyboards with the same VID/PID and report protocol will probably
+work too, but I haven't tested any. Devices with different identifiers or
+protocols aren't recognised.
 
 ## Install
 
@@ -62,21 +61,20 @@ Opening the app installs a per-user LaunchAgent:
 ~/Library/LaunchAgents/com.ikuyu.keyboard-logo-fix.plist
 ```
 
-The background service starts at login and keeps running, but stays idle:
-it only listens for compatible keyboards connecting and for the Mac waking.
-It briefly sends the restore report when any of these happen:
+The background service starts at login and sits idle, waiting for a compatible
+keyboard to connect or the Mac to wake. It sends a short burst of restore
+reports when:
 
 - the background service starts,
 - a compatible keyboard connects or reconnects,
 - the Mac wakes from sleep.
 
-Each trigger sends for about 3 seconds at 50 ms intervals — roughly 60 reports.
-The repetition is what outlasts macOS writing the green indicator state again
-while the device initialises. The report only clears the indicator override,
-letting the keyboard fall back to the LOGO effect you saved on it.
+Each burst sends one report every 50 ms for about 3 seconds, roughly 60 in
+total. A single report isn't enough: macOS can write the green indicator state
+again while the keyboard initialises. The report only clears the indicator
+override, so the keyboard falls back to the effect you saved on it.
 
-The tool does not flash firmware, remap keys, log keystrokes, or use the
-network.
+It doesn't flash firmware, remap keys, log keystrokes, or touch the network.
 
 Preferences and logs live at:
 
@@ -95,8 +93,8 @@ Preferences and logs live at:
 ./keyboard-logo-fix --help     # usage
 ```
 
-Uninstalling the service leaves the app, the connection preference, and the
-log in place.
+`--uninstall` only removes the background service. The app, the connection
+preference and the log stay where they are.
 
 ## Build from source
 
