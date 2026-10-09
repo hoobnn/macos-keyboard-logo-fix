@@ -22,8 +22,8 @@ Both use the same HID identifiers and output report protocol:
 | Bluetooth LE | `3554:FA07` | may appear as `T100 5.0` |
 
 `T100` is the name the keyboard's controller reports to macOS, not a keyboard
-model. Other keyboards with the same VID/PID and report protocol will probably
-work too, but I haven't tested any. Devices with different identifiers or
+model. Other keyboards with the same VID/PID and report protocol are likely to
+work too, but none have been tested. Devices with different identifiers or
 protocols aren't recognised.
 
 ## Install
@@ -50,8 +50,8 @@ Or download the latest `Keyboard-Logo-Fix-<version>-macOS.zip` from the
 The first launch of a newer version stops and removes the old
 `local.codex.t100-logo-white` background service, and keeps reading the
 connection preference saved by the old version. The old
-`T100 Logo 白色呼吸.app` is not deleted automatically — move it to the Trash
-yourself.
+`T100 Logo 白色呼吸.app` is not deleted automatically; move it to the Trash
+manually.
 
 ## How it works
 
