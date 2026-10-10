@@ -147,4 +147,4 @@ for the full release steps.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) © 2026 hoobnn. Free to use, modify and distribute, provided the copyright notice is kept.
