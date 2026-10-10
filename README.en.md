@@ -1,6 +1,8 @@
 <div align="center">
 
-# Keyboard Logo Fix: get your keyboard's logo lighting back on macOS
+# Keyboard Logo Fix
+
+Restores the custom logo lighting of SCC100 and FMate98 keyboards on macOS.
 
 [简体中文](README.md) · **English**
 

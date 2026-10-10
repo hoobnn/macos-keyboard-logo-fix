@@ -1,6 +1,8 @@
 <div align="center">
 
-# Keyboard Logo Fix：恢复 macOS 下键盘的 LOGO 灯效
+# Keyboard Logo Fix
+
+在 macOS 上恢复 SCC100、FMate98 键盘的自定义 LOGO 灯效。
 
 **简体中文** · [English](README.en.md)
 
