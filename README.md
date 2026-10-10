@@ -1,6 +1,10 @@
+<div align="center">
+
 # Keyboard Logo Fix：恢复 macOS 下键盘的 LOGO 灯效
 
 **简体中文** · [English](README.en.md)
+
+</div>
 
 ![白色陶瓷键盘，LOGO 灯亮着自定义灯效](assets/readme-hero.png)
 

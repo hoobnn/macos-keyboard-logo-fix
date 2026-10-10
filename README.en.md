@@ -1,6 +1,10 @@
+<div align="center">
+
 # Keyboard Logo Fix: get your keyboard's logo lighting back on macOS
 
 [简体中文](README.md) · **English**
+
+</div>
 
 ![White ceramic keyboard with its logo lit in a custom effect](assets/readme-hero.png)
 
